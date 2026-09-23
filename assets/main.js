@@ -1,131 +1,130 @@
-const OUNCE_IN_GRAMS = 31.1034768;
-const state = { currency: 'EUR', purity: 18, range: '1M', ounceUsd: 3706.42, eurUsd: 1.1742, connected: false };
-const ranges = { '1G': 48, '1S': 70, '1M': 92, '6M': 120, '1A': 160, MAX: 210 };
+const GRAMS_PER_TROY_OUNCE = 31.1034768;
+const state = { purity: 18, currency: 'EUR', range: '1M', market: null, history: [], hover: null };
+const rangeDays = { '1S': 7, '1M': 31, '3M': 93, '6M': 186, '1A': 366, '5A': 1827 };
+const $ = (selector) => document.querySelector(selector);
+const money = (value, currency = state.currency, digits = 2) => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('it-IT', { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+const number = (value, digits = 2) => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('it-IT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+const purityFactor = () => state.purity === 18 ? 0.75 : 0.9999;
+const perGram = (ounceUsd) => ounceUsd / GRAMS_PER_TROY_OUNCE * purityFactor() / (state.currency === 'EUR' ? state.market.eurUsd : 1);
 
-document.querySelector('#app').innerHTML = `
+$('#app').innerHTML = `
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Aurea home"><span class="brand-mark">A</span><span>AUREA</span></a>
-    <nav><a class="active" href="#mercati">Mercati</a><a href="#metodo">Come funziona</a><a href="#fonti">Fonti</a></nav>
-    <div class="top-actions"><span class="market-pill" id="market-status"><i></i> Connessione dati…</span><button class="icon-button" aria-label="Impostazioni">•••</button></div>
+    <a class="brand" href="#"><span>A</span>AUREA <small>MARKETS</small></a>
+    <div class="ticker"><b>XAU/USD</b><strong id="top-xau">—</strong><span id="top-change">—</span></div>
+    <div class="top-actions"><span class="connection" id="connection"><i></i> Connessione…</span><span class="clock" id="clock"></span></div>
   </header>
-  <main>
-    <section class="hero" id="mercati">
-      <div>
-        <div class="eyebrow"><span>METALLI PREZIOSI</span><span class="slash">/</span><span id="crumb">ORO 18K</span></div>
-        <h1>Il valore dell'oro.<br><em>Senza rumore.</em></h1>
-      </div>
-      <p class="intro">Quotazioni chiare, fonti trasparenti.<br>Aggiornate mentre il mercato si muove.</p>
-    </section>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="side-title"><span>LISTA MERCATI</span><button aria-label="Aggiungi">＋</button></div>
+      <button class="market-row selected" data-purity="18"><span class="metal-icon">Au</span><span><b>Oro 18K</b><small>EUR / grammo</small></span><strong id="watch-18">—</strong></button>
+      <button class="market-row" data-purity="24"><span class="metal-icon pale">Au</span><span><b>Oro 24K</b><small>EUR / grammo</small></span><strong id="watch-24">—</strong></button>
+      <div class="side-title second"><span>RIFERIMENTI</span></div>
+      <div class="reference"><span>EUR / USD</span><b id="side-fx">—</b><small>ECB</small></div>
+      <div class="reference"><span>Oncia troy</span><b>31,1034768 g</b><small>Standard</small></div>
+      <div class="sidebar-note"><i>i</i><p>Prezzo indicativo del metallo, al netto di commissioni e lavorazione.</p></div>
+    </aside>
 
-    <section class="terminal">
-      <div class="terminal-head">
-        <div class="asset-id"><div class="coin">Au</div><div><h2 id="asset-name">Oro 18 carati</h2><p>Prezzo indicativo per grammo</p></div></div>
-        <div class="selectors">
-          <label><span>PUREZZA</span><select id="purity"><option value="18">18 carati · 750‰</option><option value="24">24 carati · 999,9‰</option></select></label>
-          <label><span>VALUTA</span><select id="currency"><option>EUR</option><option>USD</option></select></label>
+    <main class="dashboard">
+      <section class="instrument-head">
+        <div class="instrument-title"><div class="gold-orb">Au</div><div><div class="breadcrumb">METALLI / ORO / <span id="crumb">18 CARATI</span></div><h1 id="instrument">Oro 18 carati <small>• GRAMMO</small></h1></div></div>
+        <div class="controls">
+          <label>PUREZZA<select id="purity"><option value="18">18 carati · 750‰</option><option value="24">24 carati · 999,9‰</option></select></label>
+          <label>VALUTA<select id="currency"><option value="EUR">EUR €</option><option value="USD">USD $</option></select></label>
         </div>
-      </div>
-      <div class="terminal-grid">
-        <aside class="quote-panel">
-          <p class="quote-label">QUOTAZIONE ATTUALE</p>
-          <div class="quote"><span id="currency-symbol">€</span><strong id="price">89,31</strong></div>
-          <div class="delta"><span>↗</span> <b id="delta">+0,84%</b><small>oggi</small></div>
-          <div class="quote-meta"><div><span>AGGIORNATO</span><b id="updated">ora</b></div><div><span>UNITÀ</span><b>1 grammo</b></div></div>
-          <button class="alert-button"><span>＋</span> Crea avviso di prezzo</button>
-        </aside>
-        <div class="chart-panel">
-          <div class="chart-tools"><div id="range-buttons">${Object.keys(ranges).map((r) => `<button class="${r === '1M' ? 'active' : ''}" data-range="${r}">${r}</button>`).join('')}</div><button class="expand" aria-label="Espandi grafico">↗</button></div>
-          <div class="chart-wrap"><svg id="chart" viewBox="0 0 900 350" preserveAspectRatio="none" aria-label="Grafico quotazione oro"></svg><div id="tooltip" class="tooltip"></div></div>
-          <div class="chart-stats"><div><span>APERTURA</span><b id="open">88,56 €</b></div><div><span>MASSIMO</span><b id="high">89,74 €</b></div><div><span>MINIMO</span><b id="low">88,21 €</b></div><div><span>VARIAZIONE</span><b class="positive" id="variation">+0,75 €</b></div></div>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="trust" id="metodo">
-      <div class="trust-copy"><span class="section-num">01 — IL METODO</span><h2>Un dato prezioso<br>merita <em>trasparenza.</em></h2></div>
-      <div class="method-grid">
-        <article><span class="method-icon">◎</span><div><h3>Benchmark globale</h3><p>Il riferimento internazionale è il prezzo dell'oro fino espresso per oncia troy.</p></div></article>
-        <article><span class="method-icon">↔</span><div><h3>Conversione verificabile</h3><p>Convertiamo l'oncia in grammi e applichiamo cambio e titolo selezionato.</p></div></article>
-        <article><span class="method-icon">◷</span><div><h3>Aggiornamento continuo</h3><p>Il prezzo spot viene interrogato periodicamente e l'ultimo dato resta sempre visibile.</p></div></article>
-      </div>
-    </section>
-    <section class="sources" id="fonti"><span>FONTI DI RIFERIMENTO</span><a href="https://www.lbma.org.uk/prices-and-data/precious-metal-prices" target="_blank">LBMA <small>Gold Price</small></a><i></i><a href="https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html" target="_blank">ECB <small>Euro foreign exchange</small></a><p>Valore indicativo, non costituisce proposta d'acquisto o vendita.</p></section>
-  </main>
-  <footer><a class="brand" href="#"><span class="brand-mark">A</span><span>AUREA</span></a><span>© 2026 Aurea Data</span><span>Prezzi espressi al grammo</span></footer>
-`;
+      <section class="price-strip">
+        <div class="main-price"><span id="price">—</span><div><b id="change">In attesa dei dati</b><small>variazione periodo</small></div></div>
+        <div class="metric"><span>APERTURA</span><b id="open">—</b></div><div class="metric"><span>MASSIMO</span><b id="high">—</b></div><div class="metric"><span>MINIMO</span><b id="low">—</b></div><div class="metric"><span>ULTIMO UPDATE</span><b id="updated">—</b></div>
+      </section>
 
-const el = (id) => document.getElementById(id);
-const format = (value) => new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-const currentPrice = () => (state.ounceUsd / OUNCE_IN_GRAMS) * (state.currency === 'EUR' ? 1 / state.eurUsd : 1) * (state.purity === 18 ? 0.75 : 0.9999);
+      <section class="chart-card">
+        <div class="chart-toolbar"><div class="ranges">${Object.keys(rangeDays).map(r => `<button data-range="${r}" class="${r === '1M' ? 'active' : ''}">${r}</button>`).join('')}</div><div class="chart-actions"><span>LINEA</span><button id="refresh">↻ Aggiorna</button></div></div>
+        <div class="chart-stage"><svg id="chart" viewBox="0 0 1100 480" preserveAspectRatio="none" aria-label="Storico reale del prezzo dell'oro"></svg><div class="crosshair" id="crosshair"></div><div class="chart-tip" id="chart-tip"></div><div class="chart-empty" id="chart-empty"><b>Caricamento mercato…</b><span>Recupero delle quotazioni storiche reali</span></div></div>
+        <div class="volume-label">STORICO XAU/USD · CHIUSURE GIORNALIERE</div>
+      </section>
 
-function series(count, base) {
-  let seed = [...state.range].reduce((a, c) => a + c.charCodeAt(0), 19) + state.purity;
-  const random = () => ((seed = seed * 16807 % 2147483647) - 1) / 2147483646;
-  let value = base * 0.965;
-  return Array.from({ length: count }, (_, i) => {
-    value += (random() - 0.43) * base * 0.006 + Math.sin(i / 8) * base * 0.0006;
-    if (i === count - 1) value = base;
-    return value;
-  });
+      <section class="bottom-grid">
+        <div class="panel source-panel"><div class="panel-title"><span>PROVENIENZA DEL DATO</span><span class="verified">● FONTI VISIBILI</span></div><div id="sources"></div></div>
+        <div class="panel calc-panel"><div class="panel-title"><span>CALCOLO TRASPARENTE</span></div><div class="formula"><span id="formula-ounce">— USD</span><i>÷</i><span>31,1034768 g</span><i>×</i><span id="formula-purity">0,750</span><i>÷</i><span id="formula-fx">— EUR/USD</span><b>= <em id="formula-result">—</em></b></div></div>
+      </section>
+      <p class="disclaimer">Quotazione indicativa del solo contenuto aureo. Non costituisce consulenza finanziaria né proposta di acquisto o vendita.</p>
+    </main>
+  </div>`;
+
+function renderMarket() {
+  if (!state.market) return;
+  const m = state.market;
+  const price = perGram(m.ounceUsd);
+  const convertedHistory = state.history.map(row => ({ ...row, value: perGram(row.close) }));
+  const first = convertedHistory[0]?.value;
+  const change = first ? (price / first - 1) * 100 : null;
+  $('#price').textContent = money(price);
+  $('#top-xau').textContent = money(m.ounceUsd, 'USD');
+  $('#top-change').textContent = m.spotChangePercent == null ? 'SPOT' : `${m.spotChangePercent >= 0 ? '+' : ''}${number(m.spotChangePercent)}%`;
+  $('#watch-18').textContent = money(m.ounceUsd / GRAMS_PER_TROY_OUNCE * .75 / m.eurUsd, 'EUR');
+  $('#watch-24').textContent = money(m.ounceUsd / GRAMS_PER_TROY_OUNCE * .9999 / m.eurUsd, 'EUR');
+  $('#side-fx').textContent = number(m.eurUsd, 4);
+  $('#change').textContent = change == null ? '—' : `${change >= 0 ? '▲ +' : '▼ '}${number(change)}%`;
+  $('#change').className = change >= 0 ? 'up' : 'down';
+  const values = convertedHistory.map(x => x.value);
+  $('#open').textContent = money(first);
+  $('#high').textContent = money(values.length ? Math.max(...values) : null);
+  $('#low').textContent = money(values.length ? Math.min(...values) : null);
+  $('#updated').textContent = new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(m.updatedAt));
+  $('#formula-ounce').textContent = `${number(m.ounceUsd)} USD`;
+  $('#formula-purity').textContent = state.purity === 18 ? '0,750' : '0,9999';
+  $('#formula-fx').textContent = state.currency === 'EUR' ? number(m.eurUsd, 4) + ' EUR/USD' : '1,0000 USD';
+  $('#formula-result').textContent = money(price);
+  $('#instrument').innerHTML = `Oro ${state.purity} carati <small>• GRAMMO</small>`;
+  $('#crumb').textContent = `${state.purity} CARATI`;
+  document.querySelectorAll('.market-row').forEach(row => row.classList.toggle('selected', Number(row.dataset.purity) === state.purity));
+  renderSources(); drawChart(convertedHistory);
 }
 
-function drawChart() {
-  const values = series(ranges[state.range], currentPrice());
-  const width = 900, height = 350, left = 12, right = 68, top = 20, bottom = 42;
-  const min = Math.min(...values) * 0.996, max = Math.max(...values) * 1.004;
-  const x = (i) => left + i / (values.length - 1) * (width - left - right);
-  const y = (v) => top + (max - v) / (max - min) * (height - top - bottom);
-  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
-  const area = `${left},${height-bottom} ${points} ${width-right},${height-bottom}`;
-  const labels = [max, (max + min) / 2, min];
-  const symbol = state.currency === 'EUR' ? '€' : '$';
-  el('chart').innerHTML = `<defs><linearGradient id="goldFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d5af62" stop-opacity=".28"/><stop offset="1" stop-color="#d5af62" stop-opacity="0"/></linearGradient></defs>
-    ${[0,1,2].map((n) => `<line x1="${left}" y1="${top + n*(height-top-bottom)/2}" x2="${width-right}" y2="${top + n*(height-top-bottom)/2}" class="grid-line"/>`).join('')}
-    <polygon points="${area}" fill="url(#goldFade)"/><polyline points="${points}" class="price-line"/>
-    ${labels.map((v,n) => `<text x="${width-54}" y="${top+n*(height-top-bottom)/2+4}" class="axis-price">${format(v)} ${symbol}</text>`).join('')}
-    ${['24 AGO','01 SET','08 SET','15 SET','22 SET'].map((d,n) => `<text x="${left+n*(width-left-right)/4}" y="${height-12}" class="axis-date" text-anchor="${n===0?'start':n===4?'end':'middle'}">${d}</text>`).join('')}
-    <circle cx="${x(values.length-1)}" cy="${y(values.at(-1))}" r="5" class="last-dot"/>`;
-  const svg = el('chart');
-  svg.onmousemove = (event) => {
-    const rect = svg.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    const index = Math.max(0, Math.min(values.length - 1, Math.round(ratio * (values.length - 1))));
-    const tip = el('tooltip'); tip.textContent = `${format(values[index])} ${symbol}`; tip.style.left = `${event.clientX - rect.left}px`; tip.style.top = `${y(values[index]) / height * rect.height}px`; tip.classList.add('show');
-  };
-  svg.onmouseleave = () => el('tooltip').classList.remove('show');
+function renderSources() {
+  const m = state.market;
+  const sources = [
+    { name: 'Gold API', role: 'Prezzo spot XAU/USD', value: money(m.ounceUsd, 'USD'), time: m.spotTimestamp, url: 'https://gold-api.com/' },
+    { name: 'Banca Centrale Europea', role: 'Cambio ufficiale EUR/USD', value: number(m.eurUsd, 4), time: m.fxDate, url: 'https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html' },
+    { name: 'Stooq', role: 'Storico XAU/USD EOD', value: `${state.history.length} sedute`, time: state.history.at(-1)?.date, url: 'https://stooq.com/q/d/?s=xauusd' },
+    { name: 'LBMA', role: 'Benchmark internazionale', value: 'Riferimento', time: 'Gold Price', url: 'https://www.lbma.org.uk/prices-and-data/precious-metal-prices' }
+  ];
+  $('#sources').innerHTML = sources.map(s => `<a class="source-row" href="${s.url}" target="_blank" rel="noreferrer"><span class="source-check">✓</span><span><b>${s.name}</b><small>${s.role}</small></span><strong>${s.value}<small>${s.time || '—'}</small></strong><i>↗</i></a>`).join('');
 }
 
-function render() {
-  const price = currentPrice(), symbol = state.currency === 'EUR' ? '€' : '$';
-  el('price').textContent = format(price); el('currency-symbol').textContent = symbol;
-  el('asset-name').textContent = `Oro ${state.purity} carati`; el('crumb').textContent = `ORO ${state.purity}K`;
-  el('open').textContent = `${format(price * .9916)} ${symbol}`; el('high').textContent = `${format(price * 1.0048)} ${symbol}`;
-  el('low').textContent = `${format(price * .9877)} ${symbol}`; el('variation').textContent = `+${format(price * .0084)} ${symbol}`;
-  drawChart();
+function drawChart(data) {
+  const svg = $('#chart');
+  if (data.length < 2) { svg.innerHTML = ''; $('#chart-empty').classList.add('show'); return; }
+  $('#chart-empty').classList.remove('show');
+  const W = 1100, H = 480, L = 18, R = 82, T = 24, B = 44;
+  const values = data.map(d => d.value), min = Math.min(...values), max = Math.max(...values), pad = (max - min || 1) * .1;
+  const lo = min - pad, hi = max + pad, x = i => L + i / (data.length - 1) * (W-L-R), y = v => T + (hi-v)/(hi-lo)*(H-T-B);
+  const points = data.map((d,i) => `${x(i)},${y(d.value)}`).join(' '), area = `${L},${H-B} ${points} ${W-R},${H-B}`;
+  const ticks = Array.from({length:5},(_,i)=>hi-i*(hi-lo)/4), dateTicks = Array.from({length:6},(_,i)=>Math.round(i*(data.length-1)/5));
+  svg.innerHTML = `<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#dfbd70" stop-opacity=".22"/><stop offset="1" stop-color="#dfbd70" stop-opacity="0"/></linearGradient></defs>${ticks.map((v,i)=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" class="grid"/><text x="${W-R+13}" y="${y(v)+4}" class="axis">${number(v)}</text>`).join('')}<polygon points="${area}" fill="url(#area)"/><polyline points="${points}" class="line"/>${dateTicks.map(i=>`<text x="${x(i)}" y="${H-14}" class="axis date" text-anchor="${i===0?'start':i===data.length-1?'end':'middle'}">${new Intl.DateTimeFormat('it-IT',{day:'2-digit',month:'short',year:data.length>370?'2-digit':undefined}).format(new Date(data[i].date+'T12:00:00'))}</text>`).join('')}<circle cx="${x(data.length-1)}" cy="${y(data.at(-1).value)}" r="5" class="dot"/>`;
+  svg.onmousemove = e => { const r=svg.getBoundingClientRect(), i=Math.max(0,Math.min(data.length-1,Math.round((e.clientX-r.left)/r.width*(data.length-1)))), d=data[i], cx=x(i)/W*r.width, cy=y(d.value)/H*r.height; $('#crosshair').style.left=cx+'px'; $('#crosshair').classList.add('show'); const tip=$('#chart-tip'); tip.innerHTML=`<span>${d.date}</span><b>${money(d.value)}</b><small>XAU/USD ${money(d.close,'USD')}</small>`; tip.style.left=Math.min(cx,r.width-150)+'px'; tip.style.top=Math.max(8,cy-75)+'px'; tip.classList.add('show'); };
+  svg.onmouseleave=()=>{$('#crosshair').classList.remove('show');$('#chart-tip').classList.remove('show');};
 }
 
-el('purity').onchange = (e) => { state.purity = Number(e.target.value); render(); };
-el('currency').onchange = (e) => { state.currency = e.target.value; render(); };
-el('range-buttons').onclick = (e) => { if (!e.target.dataset.range) return; state.range = e.target.dataset.range; document.querySelectorAll('#range-buttons button').forEach(b => b.classList.toggle('active', b === e.target)); drawChart(); };
-
-async function refreshMarket() {
+async function loadMarket() {
+  $('#connection').innerHTML='<i></i> Aggiornamento…';
   try {
-    const [gold, fx] = await Promise.all([
-      fetch('https://api.gold-api.com/price/XAU').then(r => { if (!r.ok) throw new Error(); return r.json(); }),
-      fetch('https://api.frankfurter.app/latest?from=EUR&to=USD').then(r => { if (!r.ok) throw new Error(); return r.json(); })
-    ]);
-    if (gold.price) state.ounceUsd = gold.price;
-    if (fx.rates?.USD) state.eurUsd = fx.rates.USD;
-    state.connected = true;
-    el('market-status').innerHTML = '<i></i> Dati live';
-    el('updated').textContent = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(new Date());
-    render();
-  } catch {
-    state.connected = false;
-    el('updated').textContent = 'ultimo dato';
-    el('market-status').innerHTML = '<i></i> Dati di fallback';
-    el('market-status').classList.add('offline');
+    const response = await fetch(`/api/market?days=${rangeDays[state.range]}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    state.market = payload.market; state.history = payload.history;
+    $('#connection').innerHTML='<i></i> Dati verificati'; $('#connection').className='connection live'; renderMarket();
+  } catch (error) {
+    $('#connection').innerHTML='<i></i> Feed non disponibile'; $('#connection').className='connection error';
+    $('#chart-empty').innerHTML='<b>Dati live non disponibili</b><span>Avvia con <code>npm start</code>. Nessun valore stimato viene mostrato.</span>'; $('#chart-empty').classList.add('show');
   }
 }
 
-render(); refreshMarket(); setInterval(refreshMarket, 60000);
+$('#purity').onchange=e=>{state.purity=Number(e.target.value);renderMarket();};
+$('#currency').onchange=e=>{state.currency=e.target.value;renderMarket();};
+document.querySelectorAll('.market-row').forEach(r=>r.onclick=()=>{$('#purity').value=r.dataset.purity;state.purity=Number(r.dataset.purity);renderMarket();});
+$('.ranges').onclick=e=>{if(!e.target.dataset.range)return;state.range=e.target.dataset.range;document.querySelectorAll('.ranges button').forEach(b=>b.classList.toggle('active',b===e.target));loadMarket();};
+$('#refresh').onclick=loadMarket;
+setInterval(()=>$('#clock').textContent=new Intl.DateTimeFormat('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(new Date()),1000);
+loadMarket(); setInterval(loadMarket,60000);

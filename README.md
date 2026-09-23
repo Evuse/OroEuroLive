@@ -1,101 +1,115 @@
-# Aurea — quotazione dell'oro al grammo
+# Aurea Markets
 
-Aurea è una dashboard web in italiano che mostra il valore indicativo dell'oro
-18 o 24 carati al grammo, in euro oppure dollari. Include un grafico interattivo,
-diversi intervalli temporali e il collegamento alle fonti di riferimento LBMA ed
-ECB.
+Dashboard professionale per seguire il valore intrinseco dell'oro 18K e 24K al
+grammo, in EUR o USD. Mostra esclusivamente dati recuperati dalle fonti indicate:
+se una fonte non risponde, non inventa né interpola un prezzo.
 
-## Avvio rapido (senza installare nulla)
+## Avvio
 
-1. Clona o scarica il repository.
-2. Entra nella cartella `OroEuroLive`.
-3. Apri **`index.html`** con un doppio clic.
-
-La pagina e tutte le sue funzioni principali vengono caricate anche tramite
-`file://`: JavaScript e CSS usano percorsi relativi, i caratteri hanno fallback
-di sistema e l'interfaccia non richiede un server né risorse grafiche remote.
-Se il browser o la rete bloccano le richieste alle quotazioni esterne, la
-dashboard continua a funzionare mostrando l'ultimo valore di fallback e la
-dicitura “ultimo dato”.
-
-## Sviluppo locale (consigliato)
-
-Richiede [Node.js](https://nodejs.org/) 20.19 o superiore.
+Richiede Node.js 20 o successivo. Non sono necessarie chiavi API.
 
 ```bash
 git clone <URL-DEL-REPOSITORY>
 cd OroEuroLive
 npm install
-npm run dev
+npm start
 ```
 
-Apri quindi l'indirizzo indicato da Vite, normalmente
-<http://localhost:5173>. Il server ricarica automaticamente la pagina quando
-modifichi un file.
+Apri **http://localhost:5173**. L'applicazione aggiorna il mercato ogni minuto.
+Per sviluppare con riavvio automatico usa `npm run dev`.
 
-## Build di produzione
+> `index.html` può ancora essere aperto direttamente per vedere l'interfaccia,
+> ma i browser non consentono a una pagina `file://` di chiamare l'API locale.
+> Per prezzi reali e storico bisogna usare `npm start`. In modalità diretta la UI
+> mostra quindi “Feed non disponibile”, mai numeri fittizi.
+
+## Fonti e attendibilità
+
+Ogni fonte, valore e data di aggiornamento sono visibili nel pannello
+**Provenienza del dato** della dashboard.
+
+| Dato | Fonte | Uso |
+| --- | --- | --- |
+| XAU/USD spot | [Gold API](https://gold-api.com/) | Ultimo prezzo spot disponibile per oncia troy |
+| EUR/USD | [Banca Centrale Europea](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) | Cambio di riferimento ufficiale giornaliero |
+| Storico XAU/USD | [Stooq](https://stooq.com/q/d/?s=xauusd) | Chiusure giornaliere reali del grafico |
+| Benchmark | [LBMA Gold Price](https://www.lbma.org.uk/prices-and-data/precious-metal-prices) | Riferimento internazionale del mercato professionale |
+
+LBMA è un benchmark amministrato e soggetto a licenza: non viene presentato
+impropriamente come feed gratuito in tempo reale. La dashboard lo mostra come
+riferimento verificabile; il valore continuo è identificato separatamente come
+spot Gold API. Anche lo storico Stooq è dichiarato esplicitamente.
+
+Il server valida inoltre intervalli plausibili per spot, cambio e storico. Se
+anche una sola fonte necessaria non risponde o restituisce dati non validi,
+l'endpoint risponde con un errore e la dashboard non mostra valori stimati.
+
+## Formula
+
+```text
+USD/grammo = XAU/USD ÷ 31,1034768 × purezza
+EUR/grammo = XAU/USD ÷ 31,1034768 × purezza ÷ EUR/USD
+```
+
+- 18 carati: purezza `0,750`.
+- 24 carati: purezza `0,9999`.
+- Il cambio ECB esprime quanti dollari corrispondono a un euro; per questo la
+  conversione da USD a EUR avviene tramite divisione.
+- Il valore riguarda solo il contenuto aureo e non include spread, commissioni,
+  lavorazione, imposte o margine del compro-oro.
+
+La formula completa e i suoi valori correnti sono sempre visibili nella
+dashboard.
+
+## Build e distribuzione
 
 ```bash
-npm install
+npm run check
 npm run build
+cd dist
+node server.mjs
 ```
 
-Lo script di build genera la cartella `dist/`. Puoi:
+La cartella `dist/` contiene interfaccia e server. Il processo ascolta la porta
+`5173`, oppure la porta definita nella variabile d'ambiente `PORT`:
 
-- aprire direttamente **`dist/index.html`**;
-- oppure provarla con un server locale eseguendo `npm run preview` e aprendo
-  l'indirizzo mostrato nel terminale.
-
-Tutti i riferimenti usano percorsi relativi, quindi la build funziona anche in
-una sottocartella, su GitHub Pages o aperta direttamente dal disco. La build
-copia volutamente gli stessi asset già verificati alla radice: non esistono due
-versioni diverse dell'applicazione da mantenere.
-
-## Come viene calcolato il prezzo
-
-Il prezzo visualizzato è ottenuto dal prezzo spot XAU per oncia troy:
-
-```text
-prezzo/grammo = prezzo XAU/USD ÷ 31,1034768 ÷ cambio EUR/USD × purezza
+```bash
+PORT=8080 npm start
 ```
 
-- Per **18 carati** viene applicato il coefficiente `0,75`.
-- Per **24 carati** viene applicato il coefficiente `0,9999`.
-- In modalità USD non viene applicata la conversione EUR/USD.
-- L'app tenta un aggiornamento ogni 60 secondi e conserva valori di fallback
-  quando il servizio esterno non è raggiungibile.
+Per un deploy pubblico è consigliato eseguire `server.mjs` dietro un reverse
+proxy HTTPS. Il proxy server-side evita i problemi CORS delle fonti esterne e
+mantiene una cache breve: 55 secondi per lo spot e un'ora per cambio e storico.
 
-Il prezzo è indicativo e non costituisce una proposta di acquisto o vendita.
-LBMA è il benchmark internazionale mostrato come fonte di riferimento; ECB è la
-fonte di riferimento per il cambio. Il feed spot utilizzato per l'aggiornamento
-continuo è Gold API, mentre il cambio viene letto tramite Frankfurter.
+## Endpoint
 
-## Struttura del progetto
+`GET /api/market?days=31` restituisce:
 
-```text
-.
-├── index.html                 # pagina e punti di ingresso CSS/JS
-├── assets/
-│   ├── main.js                # interfaccia, calcoli, grafico e aggiornamenti
-│   └── style.css              # stile responsive
-├── scripts/build.mjs          # genera la cartella dist senza cambiare i percorsi
-├── vite.config.js             # server di sviluppo con percorsi relativi
-└── package.json               # comandi npm
-```
+- spot XAU/USD e relativo timestamp;
+- cambio ECB EUR/USD e data ufficiale;
+- storico giornaliero XAU/USD richiesto;
+- timestamp dell'aggregazione.
+
+Gli intervalli ammessi sono limitati dal server tra 7 e 1.827 giorni.
 
 ## Risoluzione dei problemi
 
-### Vedo “ultimo dato”
+### La dashboard dice “Feed non disponibile”
 
-L'interfaccia è attiva, ma il browser non ha raggiunto uno dei servizi esterni.
-Controlla la connessione, eventuali estensioni anti-tracciamento, proxy o policy
-aziendali. Le tendine, il grafico e le conversioni restano utilizzabili.
+1. Verifica di aver aperto `http://localhost:5173`, non `index.html` con doppio
+   clic.
+2. Controlla il terminale in cui è in esecuzione `npm start`: indica quale fonte
+   non ha risposto.
+3. Verifica che proxy, firewall o DNS consentano l'accesso HTTPS a Gold API, ECB
+   e Stooq.
+4. Prova l'aggregatore con:
 
-### Vedo ancora una pagina bianca
+   ```bash
+   curl 'http://localhost:5173/api/market?days=31'
+   ```
 
-1. Assicurati di aver aggiornato il clone con `git pull`.
-2. Verifica che esistano `assets/main.js` e `assets/style.css`.
-3. Forza il ricaricamento con <kbd>Ctrl</kbd>+<kbd>F5</kbd> (Windows/Linux) o
-   <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (macOS).
-4. In alternativa esegui `npm run dev` e usa esattamente l'URL mostrato nel
-   terminale; non aprire una vecchia copia di `dist/index.html`.
+### I prezzi di un negozio sono differenti
+
+È normale: Aurea calcola il valore teorico del metallo fino contenuto nell'oggetto.
+Un operatore applica spread, costi, margini e una valutazione dello stato del
+materiale. Aurea non presenta il valore spot come prezzo garantito di acquisto.
