@@ -30,15 +30,17 @@ Ogni fonte, valore e data di aggiornamento sono visibili nel pannello
 
 | Dato | Fonte | Uso |
 | --- | --- | --- |
-| XAU/USD spot | [Gold API](https://gold-api.com/) | Ultimo prezzo spot disponibile per oncia troy |
-| EUR/USD | [Banca Centrale Europea](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) | Cambio di riferimento ufficiale giornaliero |
-| Storico XAU/USD | [Stooq](https://stooq.com/q/d/?s=xauusd) | Chiusure giornaliere reali del grafico |
+| Oro USD/oncia | [Gold API](https://gold-api.com/), fallback [Yahoo Finance](https://finance.yahoo.com/quote/GC=F/) | Ultimo prezzo disponibile |
+| EUR/USD | [Banca Centrale Europea](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html), fallback [Yahoo Finance](https://finance.yahoo.com/quote/EURUSD=X/) | Cambio EUR/USD |
+| Storico oro | [Yahoo Finance](https://finance.yahoo.com/quote/GC=F/) | Chiusure giornaliere reali del grafico |
 | Benchmark | [LBMA Gold Price](https://www.lbma.org.uk/prices-and-data/precious-metal-prices) | Riferimento internazionale del mercato professionale |
 
 LBMA è un benchmark amministrato e soggetto a licenza: non viene presentato
 impropriamente come feed gratuito in tempo reale. La dashboard lo mostra come
 riferimento verificabile; il valore continuo è identificato separatamente come
-spot Gold API. Anche lo storico Stooq è dichiarato esplicitamente.
+spot Gold API. Lo storico usa Yahoo Finance: viene provato prima XAU/USD spot e,
+se il simbolo non è disponibile, il future COMEX Gold (`GC=F`). Il nome della
+serie effettivamente utilizzata è sempre riportato dentro la dashboard.
 
 Il server valida inoltre intervalli plausibili per spot, cambio e storico. Se
 anche una sola fonte necessaria non risponde o restituisce dati non validi,
@@ -101,7 +103,7 @@ Gli intervalli ammessi sono limitati dal server tra 7 e 1.827 giorni.
 2. Controlla il terminale in cui è in esecuzione `npm start`: indica quale fonte
    non ha risposto.
 3. Verifica che proxy, firewall o DNS consentano l'accesso HTTPS a Gold API, ECB
-   e Stooq.
+   e Yahoo Finance.
 4. Prova l'aggregatore con:
 
    ```bash

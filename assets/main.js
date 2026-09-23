@@ -41,7 +41,7 @@ $('#app').innerHTML = `
       <section class="chart-card">
         <div class="chart-toolbar"><div class="ranges">${Object.keys(rangeDays).map(r => `<button data-range="${r}" class="${r === '1M' ? 'active' : ''}">${r}</button>`).join('')}</div><div class="chart-actions"><span>LINEA</span><button id="refresh">↻ Aggiorna</button></div></div>
         <div class="chart-stage"><svg id="chart" viewBox="0 0 1100 480" preserveAspectRatio="none" aria-label="Storico reale del prezzo dell'oro"></svg><div class="crosshair" id="crosshair"></div><div class="chart-tip" id="chart-tip"></div><div class="chart-empty" id="chart-empty"><b>Caricamento mercato…</b><span>Recupero delle quotazioni storiche reali</span></div></div>
-        <div class="volume-label">STORICO XAU/USD · CHIUSURE GIORNALIERE</div>
+        <div class="volume-label" id="history-label">STORICO ORO · CHIUSURE GIORNALIERE</div>
       </section>
 
       <section class="bottom-grid">
@@ -76,6 +76,7 @@ function renderMarket() {
   $('#formula-purity').textContent = state.purity === 18 ? '0,750' : '0,9999';
   $('#formula-fx').textContent = state.currency === 'EUR' ? number(m.eurUsd, 4) + ' EUR/USD' : '1,0000 USD';
   $('#formula-result').textContent = money(price);
+  $('#history-label').textContent = `${m.historySource || 'Yahoo Finance'} · CHIUSURE GIORNALIERE`;
   $('#instrument').innerHTML = `Oro ${state.purity} carati <small>• GRAMMO</small>`;
   $('#crumb').textContent = `${state.purity} CARATI`;
   document.querySelectorAll('.market-row').forEach(row => row.classList.toggle('selected', Number(row.dataset.purity) === state.purity));
@@ -85,9 +86,9 @@ function renderMarket() {
 function renderSources() {
   const m = state.market;
   const sources = [
-    { name: 'Gold API', role: 'Prezzo spot XAU/USD', value: money(m.ounceUsd, 'USD'), time: m.spotTimestamp, url: 'https://gold-api.com/' },
-    { name: 'Banca Centrale Europea', role: 'Cambio ufficiale EUR/USD', value: number(m.eurUsd, 4), time: m.fxDate, url: 'https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html' },
-    { name: 'Stooq', role: 'Storico XAU/USD EOD', value: `${state.history.length} sedute`, time: state.history.at(-1)?.date, url: 'https://stooq.com/q/d/?s=xauusd' },
+    { name: m.spotSource, role: 'Prezzo oro USD/oncia', value: money(m.ounceUsd, 'USD'), time: m.spotTimestamp, url: m.spotSourceUrl },
+    { name: m.fxSource, role: 'Cambio EUR/USD', value: number(m.eurUsd, 4), time: m.fxDate, url: m.fxSourceUrl },
+    { name: m.historySource, role: 'Storico giornaliero', value: `${state.history.length} sedute`, time: state.history.at(-1)?.date, url: m.historySourceUrl },
     { name: 'LBMA', role: 'Benchmark internazionale', value: 'Riferimento', time: 'Gold Price', url: 'https://www.lbma.org.uk/prices-and-data/precious-metal-prices' }
   ];
   $('#sources').innerHTML = sources.map(s => `<a class="source-row" href="${s.url}" target="_blank" rel="noreferrer"><span class="source-check">✓</span><span><b>${s.name}</b><small>${s.role}</small></span><strong>${s.value}<small>${s.time || '—'}</small></strong><i>↗</i></a>`).join('');
